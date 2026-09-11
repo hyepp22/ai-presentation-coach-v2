@@ -1,5 +1,6 @@
 import os
 import time
+import random
 import tempfile
 import streamlit as st
 import streamlit.components.v1 as components
@@ -8,13 +9,15 @@ from google import genai
 
 st.set_page_config(page_title="AI 학생 발표 코치", page_icon="🎤", layout="wide")
 
-api_key = os.environ.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
+# Secrets 또는 환경 변수에서 API 키 불러오기
+raw_api_keys = os.environ.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
 
-if not api_key:
+if not raw_api_keys:
     st.error("서버에 GEMINI_API_KEY 설정이 안 되어 있습니다.")
     st.stop()
 
-client = genai.Client(api_key=api_key)
+# 쉼표(,)로 구분된 키들을 리스트로 분리
+api_key_list = [k.strip() for k in raw_api_keys.split(",") if k.strip()]
 
 st.title("🎤 AI 발표 피드백 시스템")
 st.write("발표 연습 영상을 올리면 AI 코치가 시각적/청각적 요소를 분석해 드립니다.")
@@ -30,6 +33,10 @@ if uploaded_file is not None:
         
         tmp_file_path = None
         video_file = None
+        
+        # 호출할 때마다 등록된 API 키 중 하나를 무작위로 선택 (부하 분산)
+        selected_key = random.choice(api_key_list)
+        client = genai.Client(api_key=selected_key)
         
         try:
             status.info("1/4: 영상 파일을 준비 중입니다...")
@@ -63,7 +70,7 @@ if uploaded_file is not None:
             4. 🚀 핵심 개선 팁 3가지
             """
             
-            # 503 과부하 에러 대비 자동 재시도 로직 & 최신 gemini-3.6-flash 모델 지정
+            # 과부하 에러 대비 자동 재시도 로직 & 최신 gemini-3.6-flash 모델
             max_retries = 3
             response = None
             
@@ -75,10 +82,13 @@ if uploaded_file is not None:
                     )
                     break
                 except Exception as api_err:
-                    if "503" in str(api_err) or "UNAVAILABLE" in str(api_err):
+                    if any(err_code in str(api_err) for err_code in ["503", "429", "UNAVAILABLE", "RESOURCE_EXHAUSTED"]):
                         if attempt < max_retries - 1:
-                            status.warning(f"서버 사용량이 많아 재시도 중입니다... ({attempt + 1}/{max_retries})")
-                            time.sleep(4)
+                            # 실패 시 다른 API 키로 교체하여 재시도
+                            alt_key = random.choice(api_key_list)
+                            client = genai.Client(api_key=alt_key)
+                            status.warning(f"서버 요청을 재조정 중입니다... ({attempt + 1}/{max_retries})")
+                            time.sleep(3)
                         else:
                             raise api_err
                     else:
@@ -91,8 +101,8 @@ if uploaded_file is not None:
                 st.session_state["feedback_result"] = response.text
 
         except Exception as e:
-            if "503" in str(e) or "UNAVAILABLE" in str(e):
-                st.error("현재 구글 AI 서버 트래픽이 일시적으로 폭주 중입니다. 1~2분 뒤 [AI 분석 요청하기]를 다시 눌러주세요.")
+            if any(err_code in str(e) for err_code in ["503", "429", "UNAVAILABLE", "RESOURCE_EXHAUSTED"]):
+                st.error("현재 순간적인 트래픽이 많습니다. 약 30초 후 [AI 분석 요청하기]를 다시 눌러주세요.")
             else:
                 st.error(f"오류가 발생했습니다: {e}")
             
@@ -105,7 +115,7 @@ if uploaded_file is not None:
                 except Exception:
                     pass
 
-# 분석 결과 출력 및 리포트 저장 영역
+# 피드백 리포트 및 인쇄 영역
 if "feedback_result" in st.session_state:
     st.markdown("---")
     st.markdown("### 📊 AI 발표 피드백 리포트")
