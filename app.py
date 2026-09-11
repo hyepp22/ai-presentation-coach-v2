@@ -2,9 +2,9 @@ import os
 import time
 import tempfile
 import streamlit as st
+import streamlit.components.v1 as components
 import markdown
 from google import genai
-from html2image import Html2Image
 
 st.set_page_config(page_title="AI 학생 발표 코치", page_icon="🎤", layout="wide")
 
@@ -63,7 +63,7 @@ if uploaded_file is not None:
             4. 🚀 핵심 개선 팁 3가지
             """
             
-            # --- 503 과부하 에러 대비 자동 재시도 로직 ---
+            # 503 과부하 에러 대비 자동 재시도 로직
             max_retries = 3
             response = None
             
@@ -73,12 +73,12 @@ if uploaded_file is not None:
                         model='gemini-2.5-flash',
                         contents=[video_file, prompt]
                     )
-                    break  # 성공 시 반복문 탈출
+                    break
                 except Exception as api_err:
                     if "503" in str(api_err) or "UNAVAILABLE" in str(api_err):
                         if attempt < max_retries - 1:
                             status.warning(f"서버 사용량이 많아 재시도 중입니다... ({attempt + 1}/{max_retries})")
-                            time.sleep(4)  # 4초 대기 후 재시도
+                            time.sleep(4)
                         else:
                             raise api_err
                     else:
@@ -105,62 +105,65 @@ if uploaded_file is not None:
                 except Exception:
                     pass
 
-# 분석 결과 출력 및 이미지 파일 다운로드 영역
+# 분석 결과 출력 및 리포트 저장 영역
 if "feedback_result" in st.session_state:
     st.markdown("---")
     st.markdown("### 📊 AI 발표 피드백 리포트")
+    
+    # 일반 마크다운 표시
     st.markdown(st.session_state["feedback_result"])
     
-    html_body = markdown.markdown(st.session_state["feedback_result"])
-    full_html = f"""
+    # HTML 카드 형태로 예쁘게 변환 및 저장/인쇄 기능 제공
+    html_content = markdown.markdown(st.session_state["feedback_result"])
+    
+    report_html = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <meta charset="utf-8">
         <style>
             body {{
-                font-family: sans-serif;
-                background-color: #ffffff;
-                color: #222222;
-                padding: 30px;
-                line-height: 1.6;
+                font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+                background-color: #f8fafc;
+                padding: 20px;
+                color: #1e293b;
             }}
-            h1, h2, h3 {{ color: #1e3a8a; }}
-            ul, ol {{ padding-left: 20px; }}
-            li {{ margin-bottom: 8px; }}
-            .container {{
+            .card {{
+                background-color: #ffffff;
                 border: 2px solid #e2e8f0;
                 border-radius: 12px;
-                padding: 25px;
-                background-color: #f8fafc;
+                padding: 30px;
+                box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            }}
+            h1, h2, h3 {{ color: #1e3a8a; }}
+            button {{
+                background-color: #2563eb;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                font-size: 16px;
+                border-radius: 6px;
+                cursor: pointer;
+                margin-bottom: 20px;
+            }}
+            button:hover {{ background-color: #1d4ed8; }}
+            @media print {{
+                button {{ display: none; }}
+                body {{ background-color: white; padding: 0; }}
+                .card {{ border: none; box-shadow: none; }}
             }}
         </style>
     </head>
     <body>
-        <div class="container">
+        <button onclick="window.print()">🖨️ 리포트 인쇄 / PDF 및 이미지로 저장하기</button>
+        <div class="card">
             <h2>🎤 AI 발표 피드백 리포트</h2>
             <hr>
-            {html_body}
+            {html_content}
         </div>
     </body>
     </html>
     """
     
-    try:
-        hti = Html2Image()
-        img_name = "feedback_result.png"
-        hti.screenshot(html_str=full_html, save_as=img_name, size=(800, 1000))
-        
-        if os.path.exists(img_name):
-            with open(img_name, "rb") as file:
-                img_bytes = file.read()
-            
-            st.download_button(
-                label="📷 피드백 결과 이미지 파일(PNG)로 다운로드",
-                data=img_bytes,
-                file_name="presentation_feedback.png",
-                mime="image/png"
-            )
-            os.remove(img_name)
-    except Exception as img_err:
-        st.caption("※ 이미지 다운로드 기능 준비 중입니다. 텍스트를 드래그하여 복사할 수 있습니다.")
+    st.markdown("#### 🖨️ 피드백 결과 저장하기")
+    components.html(report_html, height=600, scrolling=True)
