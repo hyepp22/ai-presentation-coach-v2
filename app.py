@@ -63,8 +63,9 @@ if uploaded_file is not None:
             4. 🚀 핵심 개선 팁 3가지
             """
             
+            # 최신 gemini-3.6-flash 모델 적용
             response = client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-3.6-flash',
                 contents=[video_file, prompt]
             )
 
@@ -85,13 +86,12 @@ if uploaded_file is not None:
                 except Exception:
                     pass
 
-# 분석 결과가 세션에 저장되어 있으면 리포트 표시 및 이미지 다운로드 기능 추가
+# 분석 결과 출력 및 이미지 파일 다운로드 영역
 if "feedback_result" in st.session_state:
     st.markdown("---")
     st.markdown("### 📊 AI 발표 피드백 리포트")
     st.markdown(st.session_state["feedback_result"])
     
-    # 마크다운 피드백을 HTML로 변환
     html_body = markdown.markdown(st.session_state["feedback_result"])
     full_html = f"""
     <!DOCTYPE html>
@@ -100,7 +100,7 @@ if "feedback_result" in st.session_state:
         <meta charset="utf-8">
         <style>
             body {{
-                font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+                font-family: sans-serif;
                 background-color: #ffffff;
                 color: #222222;
                 padding: 30px;
@@ -129,21 +129,19 @@ if "feedback_result" in st.session_state:
     
     try:
         hti = Html2Image()
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            img_path = os.path.join(tmp_dir, "feedback.png")
-            hti.screenshot(html_str=full_html, save_as="feedback.png", size=(800, 1000))
-            generated_img = os.path.join(os.getcwd(), "feedback.png")
+        img_name = "feedback_result.png"
+        hti.screenshot(html_str=full_html, save_as=img_name, size=(800, 1000))
+        
+        if os.path.exists(img_name):
+            with open(img_name, "rb") as file:
+                img_bytes = file.read()
             
-            if os.path.exists(generated_img):
-                with open(generated_img, "rb") as file:
-                    img_bytes = file.read()
-                
-                st.download_button(
-                    label="📷 피드백 결과 이미지 파일(PNG)로 다운로드",
-                    data=img_bytes,
-                    file_name="presentation_feedback.png",
-                    mime="image/png"
-                )
-                os.remove(generated_img)
+            st.download_button(
+                label="📷 피드백 결과 이미지 파일(PNG)로 다운로드",
+                data=img_bytes,
+                file_name="presentation_feedback.png",
+                mime="image/png"
+            )
+            os.remove(img_name)
     except Exception as img_err:
-        st.warning("이미지 변환 중 오류가 발생했습니다. (텍스트 복사 기능을 활용해 주세요)")
+        st.caption("※ 이미지 다운로드 기능 초기화 중입니다. 텍스트를 드래그하여 복사할 수도 있습니다.")
