@@ -63,19 +63,38 @@ if uploaded_file is not None:
             4. 🚀 핵심 개선 팁 3가지
             """
             
-            # 최신 gemini-3.6-flash 모델 적용
-            response = client.models.generate_content(
-                model='gemini-3.6-flash',
-                contents=[video_file, prompt]
-            )
+            # --- 503 과부하 에러 대비 자동 재시도 로직 ---
+            max_retries = 3
+            response = None
+            
+            for attempt in range(max_retries):
+                try:
+                    response = client.models.generate_content(
+                        model='gemini-2.5-flash',
+                        contents=[video_file, prompt]
+                    )
+                    break  # 성공 시 반복문 탈출
+                except Exception as api_err:
+                    if "503" in str(api_err) or "UNAVAILABLE" in str(api_err):
+                        if attempt < max_retries - 1:
+                            status.warning(f"서버 사용량이 많아 재시도 중입니다... ({attempt + 1}/{max_retries})")
+                            time.sleep(4)  # 4초 대기 후 재시도
+                        else:
+                            raise api_err
+                    else:
+                        raise api_err
 
             progress.progress(100)
             status.success("분석 완료!")
             
-            st.session_state["feedback_result"] = response.text
+            if response:
+                st.session_state["feedback_result"] = response.text
 
         except Exception as e:
-            st.error(f"오류가 발생했습니다: {e}")
+            if "503" in str(e) or "UNAVAILABLE" in str(e):
+                st.error("현재 구글 AI 서버 트래픽이 일시적으로 폭주 중입니다. 1~2분 뒤 [AI 분석 요청하기]를 다시 눌러주세요.")
+            else:
+                st.error(f"오류가 발생했습니다: {e}")
             
         finally:
             if tmp_file_path and os.path.exists(tmp_file_path):
@@ -144,4 +163,4 @@ if "feedback_result" in st.session_state:
             )
             os.remove(img_name)
     except Exception as img_err:
-        st.caption("※ 이미지 다운로드 기능 초기화 중입니다. 텍스트를 드래그하여 복사할 수도 있습니다.")
+        st.caption("※ 이미지 다운로드 기능 준비 중입니다. 텍스트를 드래그하여 복사할 수 있습니다.")
