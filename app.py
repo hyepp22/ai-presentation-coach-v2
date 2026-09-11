@@ -63,14 +63,14 @@ if uploaded_file is not None:
             4. 🚀 핵심 개선 팁 3가지
             """
             
-            # 503 과부하 에러 대비 자동 재시도 로직
+            # 503 과부하 에러 대비 자동 재시도 로직 & 최신 gemini-3.6-flash 모델 지정
             max_retries = 3
             response = None
             
             for attempt in range(max_retries):
                 try:
                     response = client.models.generate_content(
-                        model='gemini-2.5-flash',
+                        model='gemini-3.6-flash',
                         contents=[video_file, prompt]
                     )
                     break
@@ -110,10 +110,8 @@ if "feedback_result" in st.session_state:
     st.markdown("---")
     st.markdown("### 📊 AI 발표 피드백 리포트")
     
-    # 일반 마크다운 표시
     st.markdown(st.session_state["feedback_result"])
     
-    # HTML 카드 형태로 예쁘게 변환 및 저장/인쇄 기능 제공
     html_content = markdown.markdown(st.session_state["feedback_result"])
     
     report_html = f"""
